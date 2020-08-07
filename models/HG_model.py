@@ -12,13 +12,14 @@ class HGModel(BaseModel):
 
     def __init__(self, opt):
         BaseModel.initialize(self, opt)
-
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")        
+        
         print("===========================================LOADING Hourglass NETWORK====================================================")
         model = pytorch_DIW_scratch.pytorch_DIW_scratch
         model= torch.nn.parallel.DataParallel(model, device_ids = [0,1])
-        model_parameters = self.load_network(model, 'G', 'best_vanila')
+        model_parameters = self.load_network(model, 'G', 'best_generalization')
         model.load_state_dict(model_parameters)
-        self.netG = model.cuda()
+        self.netG = model.to(self.device)
 
 
     def batch_classify(self, z_A_arr, z_B_arr, ground_truth ):
@@ -81,8 +82,8 @@ class HGModel(BaseModel):
             # print(x_A_arr.size())
             # print(y_A_arr.size())
 
-            z_A_arr = torch.gather( torch.index_select(predict_depth, 1 ,x_A_arr.cuda()) , 0, y_A_arr.view(1, -1).cuda())# predict_depth:index(2, x_A_arr):gather(1, y_A_arr:view(1, -1))
-            z_B_arr = torch.gather( torch.index_select(predict_depth, 1 ,x_B_arr.cuda()) , 0, y_B_arr.view(1, -1).cuda())
+            z_A_arr = torch.gather( torch.index_select(predict_depth, 1 ,x_A_arr.to(self.device)) , 0, y_A_arr.view(1, -1).to(self.device))# predict_depth:index(2, x_A_arr):gather(1, y_A_arr:view(1, -1))
+            z_B_arr = torch.gather( torch.index_select(predict_depth, 1 ,x_B_arr.to(self.device)) , 0, y_B_arr.view(1, -1).to(self.device))
 
             z_A_arr = z_A_arr.squeeze(0)
             z_B_arr = z_B_arr.squeeze(0)
@@ -97,7 +98,7 @@ class HGModel(BaseModel):
 
 
     def evaluate_SDR(self, input_, targets):
-        input_images = Variable(input_.cuda() )
+        input_images = Variable(input_.to(self.device) )
         prediction_d = self.netG.forward(input_images) 
 
         total_error, total_samples = self.computeSDR(prediction_d.data, targets)
@@ -121,8 +122,8 @@ class HGModel(BaseModel):
         count = 0            
         total_loss = Variable(torch.cuda.FloatTensor(1))
         total_loss[0] = 0
-        mask_0 = Variable(targets['mask_0'].cuda(), requires_grad = False)
-        d_gt_0 = torch.log(Variable(targets['gt_0'].cuda(), requires_grad = False))
+        mask_0 = Variable(targets['mask_0'].to(self.device), requires_grad = False)
+        d_gt_0 = torch.log(Variable(targets['gt_0'].to(self.device), requires_grad = False))
 
         for i in range(0, mask_0.size(0)):
  
@@ -133,7 +134,7 @@ class HGModel(BaseModel):
 
 
     def evaluate_sc_inv(self, input_, targets):
-        input_images = Variable(input_.cuda() )
+        input_images = Variable(input_.to(self.device) )
         prediction_d = self.netG.forward(input_images) 
         rmse_loss , count= self.evaluate_RMSE(input_images, prediction_d, targets)
 
