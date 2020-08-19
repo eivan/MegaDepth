@@ -6,18 +6,17 @@ from torch.autograd import Variable
 import numpy as np
 from options.train_options import TrainOptions
 
+opt = TrainOptions()  # set CUDA_VISIBLE_DEVICES before import torch
+opt.parser.add_argument('input_image', type=str, help='input image to perform depth estimation on')
+opt = opt.parse()
+
 from data.data_loader import CreateDataLoader
 from models.models import create_model
 from skimage import io
 from skimage.transform import resize
 
-def predict_depth(img_path_in):
-    
-    opt = TrainOptions()
-    opt.parser.add_argument('-f', type=str, default='dummy', help='dummy') # needed coz' jupyter
-    opt = opt.parse()
-    model = create_model(opt)
-    
+def predict_depth(model, img_path_in):
+
     model.switch_to_eval()
 
     img = np.float32(io.imread(img_path_in))/255.0
@@ -45,8 +44,17 @@ def predict_depth(img_path_in):
     pred_inv_depth = pred_inv_depth.data.cpu().numpy()
     # you might also use percentile for better visualization
     pred_inv_depth = pred_inv_depth/np.amax(pred_inv_depth)
-
+    
+    
     pred_inv_depth = resize(pred_inv_depth, (height, width), order = 1)
     
-    return pred_inv_depth
+    img_path_out = Path(img_path_in)
+    io.imsave(img_path_out.with_suffix('.d.png'), pred_inv_depth)
+    np.save(img_path_out.with_suffix('.d.npy'),pred_inv_depth)
+
+
+model = create_model(opt)
+img_path_in = opt.input_image
+
+predict_depth(model, img_path_in)
 
